@@ -17,50 +17,52 @@ final class ImageResizeController: RouteCollection {
 
     func index(_ req: Request) throws -> Future<Response> {
         
+            //get url from request
             let urlString = try req.query.get(String.self, at: "url")
+            //get width from request
             let width = try req.query.get(Int.self, at: "width")
+            //get height from request
             let height = try req.query.get(Int.self, at: "height")
-            
-            let fileName = URL(fileURLWithPath: urlString).lastPathComponent
-            if isFound(fileName: fileName) {
+        
+        let fileName = FilesHelper.geNewFileName(urlString: urlString, width: width, height: height)
+            //check image is found
+            if FilesHelper.isFound(fileName: fileName) {
+                //return image if it found in folder
+                //redirect to image to make it downloadable
                 return req.future(req.redirect(to: fileName))
             }
+        
+            //get client from current request
             let client = try req.make(Client.self)
+            //try to download image from url
             let response = client.get(urlString)
+        
             let data = response.map(to:  Data.self, { respo -> Data in
                 return respo.http.body.data!
                 
             }).map({ [weak self] data -> Response  in
-                guard let self = self else {
+                guard self != nil else {
                     return req.response()
                 }
-                let destination = self.getImagePath(fileName: fileName)
-                var image = try Image.init(data: data)
+                
+                
+                let destination = FilesHelper.getImagePath(fileName: fileName)
+                var image = try Image.init(data: data)//convert Data to Image Object
+                
                 if  width > 0 && height > 0 {
+                    //resize image to new width and height
                     image = image.resizedTo(width: width, height: height)!
                 }else {
                     image = image.resizedTo(width: 70, height: 70)!
                 }
-                
+                //save image to new destination
                 image.write(to: destination)
+                //redirect to image to make it downloadable
                 return req.redirect(to: fileName)
                 
             })
             return data
 
     }
-    
-    func getImagePath(fileName:String) -> URL{
-        
-        let directory = DirectoryConfig.detect()
-        let workingDirectory = directory.workDir
-        let workingDirectoryPath = URL(fileURLWithPath:workingDirectory)
-        let destination = workingDirectoryPath.appendingPathComponent("Public/\(fileName)")
-        return destination
-    }
-    
-    func isFound(fileName:String) -> Bool{
-        let destination = getImagePath(fileName: fileName)
-        return  FileManager().fileExists(atPath: destination.path)
-    }
+
 }
